@@ -53,36 +53,44 @@ ALTER TABLE public.templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 
 -- Profiles RLS
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
 CREATE POLICY "Users can view their own profile"
     ON public.profiles FOR SELECT
     USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile"
     ON public.profiles FOR UPDATE
     USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 CREATE POLICY "Users can insert their own profile"
     ON public.profiles FOR INSERT
     WITH CHECK (auth.uid() = id);
 
 -- Templates RLS (Public read for active templates)
+DROP POLICY IF EXISTS "Active templates are readable by everyone" ON public.templates;
 CREATE POLICY "Active templates are readable by everyone"
     ON public.templates FOR SELECT
     USING (is_active = true);
 
 -- Documents RLS (Strict tenant isolation)
+DROP POLICY IF EXISTS "Users can view their own documents" ON public.documents;
 CREATE POLICY "Users can view their own documents"
     ON public.documents FOR SELECT
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own documents" ON public.documents;
 CREATE POLICY "Users can insert their own documents"
     ON public.documents FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own documents" ON public.documents;
 CREATE POLICY "Users can update their own documents"
     ON public.documents FOR UPDATE
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own documents" ON public.documents;
 CREATE POLICY "Users can delete their own documents"
     ON public.documents FOR DELETE
     USING (auth.uid() = user_id);
@@ -125,14 +133,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_profiles_modtime ON public.profiles;
 CREATE TRIGGER update_profiles_modtime
     BEFORE UPDATE ON public.profiles
     FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
 
+DROP TRIGGER IF EXISTS update_templates_modtime ON public.templates;
 CREATE TRIGGER update_templates_modtime
     BEFORE UPDATE ON public.templates
     FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
 
+DROP TRIGGER IF EXISTS update_documents_modtime ON public.documents;
 CREATE TRIGGER update_documents_modtime
     BEFORE UPDATE ON public.documents
     FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
