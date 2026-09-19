@@ -39,16 +39,20 @@ export default async function DashboardPage() {
       userProfileName = profile.full_name;
     }
 
-    // Fetch user documents
-    const { data: docs } = await supabase
-      .from("documents")
-      .select("*, template:templates(*)")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(5);
+    // Fetch user documents safely
+    try {
+      const { data: docs } = await supabase
+        .from("documents")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
 
-    if (docs) {
-      userDocuments = docs as unknown as DocumentRecord[];
+      if (docs) {
+        userDocuments = docs as unknown as DocumentRecord[];
+      }
+    } catch {
+      userDocuments = [];
     }
   }
 

@@ -49,7 +49,7 @@ export default function DocumentDetailPage({ params }: DocumentDetailPageProps) 
 
         const { data: docData, error: docError } = await supabase
           .from("documents")
-          .select("*, template:templates(*)")
+          .select("*")
           .eq("id", documentId)
           .single();
 

@@ -22,6 +22,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { generatePdfBlob } from "@/lib/generators/pdfGenerator";
 import { generateDocxBlob } from "@/lib/generators/docxGenerator";
+import { SEED_TEMPLATES } from "@/lib/templates/seedTemplates";
+import { Template } from "@/lib/types/database";
 
 export default function MyDocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -30,11 +32,13 @@ export default function MyDocumentsPage() {
   const [deleteModalDoc, setDeleteModalDoc] = useState<DocumentRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [dbError, setDbError] = useState<string | null>(null);
   const supabase = createClient();
 
   const fetchDocuments = async () => {
     try {
       setIsLoading(true);
+      setDbError(null);
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -43,14 +47,45 @@ export default function MyDocumentsPage() {
 
       const { data, error } = await supabase
         .from("documents")
-        .select("*, template:templates(*)")
+        .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setDocuments((data as unknown as DocumentRecord[]) || []);
-    } catch (err) {
-      console.error("Failed to load documents:", err);
+      if (error) {
+        console.error("Supabase load documents error:", error.message, error.details || error.hint);
+        if (error.code === "42P01" || error.message.includes("does not exist") || error.message.includes("relation")) {
+          setDbError("Database tables not found. Please run the SQL migration in your Supabase SQL Editor.");
+        } else {
+          setDbError(error.message || "Unable to load documents.");
+        }
+        setDocuments([]);
+        return;
+      }
+
+      // Populate template metadata from SEED_TEMPLATES if not joined
+      const enrichedDocs: DocumentRecord[] = (data || []).map((rawDoc: Record<string, unknown>) => {
+        const doc = rawDoc as unknown as DocumentRecord;
+        let matchedTemplate = doc.template;
+        if (!matchedTemplate && doc.template_id) {
+          matchedTemplate = SEED_TEMPLATES.find((t: Template) => t.id === doc.template_id || t.slug === doc.template_id) || null;
+        }
+        if (!matchedTemplate) {
+          matchedTemplate = SEED_TEMPLATES.find((t: Template) =>
+            doc.title?.toLowerCase().includes(t.name.toLowerCase()) ||
+            doc.title?.toLowerCase().includes(t.slug.replace(/-/g, " "))
+          ) || null;
+        }
+        return {
+          ...doc,
+          template: matchedTemplate,
+        };
+      });
+
+      setDocuments(enrichedDocs);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : JSON.stringify(err);
+      console.error("Failed to load documents:", msg);
+      setDbError(msg || "Failed to load documents.");
     } finally {
       setIsLoading(false);
     }
@@ -165,6 +200,19 @@ export default function MyDocumentsPage() {
           className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-[#0f1624] border border-slate-800 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
         />
       </div>
+
+      {dbError && (
+        <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-800/60 text-xs text-amber-300 space-y-1">
+          <div className="flex items-center gap-2 font-semibold text-amber-200">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Supabase Database Notice</span>
+          </div>
+          <p>{dbError}</p>
+          <p className="text-[11px] text-amber-400/80">
+            Run the SQL script from <code>supabase/migrations/001_initial_schema.sql</code> in your Supabase SQL Editor to create the <code>documents</code>, <code>templates</code>, and <code>profiles</code> tables.
+          </p>
+        </div>
+      )}
 
       {/* Documents List */}
       {isLoading ? (
